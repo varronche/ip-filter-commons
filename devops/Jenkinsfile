@@ -1,0 +1,73 @@
+pipeline {
+    agent { node { label 'linux && jdk11' } }
+
+    environment {
+        AWS_ACCESS_KEY_ID = credentials('aws_access_key_id_k8s')
+        AWS_SECRET_ACCESS_KEY = credentials('aws_secret_access_key_k8s')
+        AWS_DEFAULT_REGION = credentials('aws_default_region')
+        AWS_DEFAULT_REGION_PRD = credentials('aws_default_region_prd')
+        DOCKER_REPOSITORY = credentials('aws_docker_repository ')
+        KUBECONFIG_QA = credentials('aws_kubernetes_config_qa')
+        KUBECONFIG_PRD = credentials('aws_kubernetes_config_prd')
+        SONAR_URL = credentials('sonar-url')
+    }
+
+    options {
+        timeout(time: 1, unit: 'HOURS')
+    }
+
+    stages {
+
+        stage('intelipost-devops-tools') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    doGenerateSubmoduleConfigurations: false,
+                    extensions: [[$class: 'RelativeTargetDirectory',
+                    relativeTargetDir: 'intelipost-devops']],
+                    submoduleCfg: [],
+                    userRemoteConfigs: [[credentialsId: 'devops-intelipost', url: 'https://github.com/intelipost/intelipost-devops.git']]
+                ])
+            }
+        }
+
+        stage('Tagging') {
+            steps {
+                sh 'bash -x intelipost-devops/pipeline-shared-librares/tagging.sh'
+            }
+        }
+
+//         stage("SonnarQube Scan") {
+//             steps {
+//                     sh './gradlew sonarqube -Dsonar.host.url=$SONAR_URL -Dsonar.verbose=true'
+//             }
+//         }
+
+        stage('Build Application') {
+            steps {
+                sh 'bash -x intelipost-devops/pipeline-shared-librares/build-package.sh'
+            }
+        }
+
+
+        stage('Build & Push Image to ECR') {
+            steps {
+                sh 'bash -x intelipost-devops/pipeline-shared-librares/docker.sh -r $DOCKER_REPOSITORY -d ecr'
+            }
+        }
+
+        stage('Deploy QA') {
+            steps {
+                sh 'bash -x intelipost-devops/pipeline-shared-librares/deploy.sh -r $AWS_DEFAULT_REGION -e qa -i deploy -d k8s'
+                sh 'bash -x intelipost-devops/pipeline-shared-librares/check_upstart_app.sh -u $URL_APP/actuator/health -s 200 -t 120 -c 10 -e qa'
+            }
+        }
+
+        stage('Deploy PRD') {
+            steps {
+                sh 'bash -x intelipost-devops/pipeline-shared-librares/deploy.sh -r $AWS_DEFAULT_REGION -e prd -i deploy -d k8s'
+                sh 'bash -x intelipost-devops/pipeline-shared-librares/check_upstart_app.sh -u $URL_APP/actuator/health -s 200 -t 200 -c 10 -e prd'
+            }
+        }
+    }
+}
