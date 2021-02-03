@@ -56,18 +56,6 @@ pipeline {
                 sh 'bash -x intelipost-devops/pipeline-shared-librares/nexus-upload.sh'
             }
         }
-        stage('Deploy QA') {
-            steps {
-                sh 'bash -x intelipost-devops/pipeline-shared-librares/deploy.sh -r $AWS_DEFAULT_REGION -e qa -i deploy -d k8s'
-                sh 'bash -x intelipost-devops/pipeline-shared-librares/check_upstart_app.sh -u $URL_APP/actuator/health -s 200 -t 120 -c 5 -e qa'
-            }
-        }
-        stage('Deploy PRD') {
-            steps {
-                sh 'bash -x intelipost-devops/pipeline-shared-librares/deploy.sh -r $AWS_DEFAULT_REGION -e prd -i deploy -d k8s'
-                sh 'bash -x intelipost-devops/pipeline-shared-librares/check_upstart_app.sh -u $URL_APP/actuator/health -s 200 -t 120 -c 5 -e prd'
-            }
-        }
     }
 }
 
